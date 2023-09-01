@@ -1,12 +1,57 @@
-'use strict';
+const AWS = require('aws-sdk');
+const S3 = new AWS.S3();
 
-const express = require('express');
-const app = express();
 
-const PORT = process.env.PORT || 3000;
+exports.handler = async (event) => {
+  console.log(event.Records[0].s3.object);
+  const newImageRecord = {'name': event.Records[0].s3.object.key, 'type': 'jpeg', "size": event.Records[0].s3.object.size};
+  let Bucket = '401lab17';
+  let Key = 'images.json';
 
-app.get("/", (req, res) => {
-  res.status(200).send("I am automatically deployed!");
-});
+  try {
+    // get images.json(file)
+  let imagesDictionary = await S3.getObject({Bucket, Key}).promise();
+  // turn buffer --> string; string --> JSON
+  let stringifiedImages = imagesDictionary.Body.toString();
+  let parsedImages = JSON.parse(stringifiedImages);
+  
+  const filteredDuplicates = parsedImages.filter(rec => rec.name !== event.Records[0].s3.object.key);
+  filteredDuplicates.push(newImageRecord);
+  
+  const body = JSON.stringify(filteredDuplicates)
+  const command = { Bucket, Key: 'images.json', Body: body, ContentType: 'application/json' };
+  await uploadFileOnS3(command);
 
-app.listen( PORT, () => console.log("Running") );
+  } catch (e) {
+    console.error(e);
+    const body = JSON.stringify(newImageRecord)
+    const command = { Bucket, Key: 'images.json', Body: body, ContentType: 'application/json' };
+    await uploadFileOnS3(command);
+    // imagesDictionary = [];
+  }
+    
+};
+
+async function uploadFileOnS3(command){
+try {
+  const response = await S3.upload(command).promise();
+  console.log('Response: ', response);
+  return response;
+} catch (err) {
+  console.log(err);
+}
+};
+
+
+// 'use strict';
+
+// const express = require('express');
+// const app = express();
+
+// const PORT = process.env.PORT || 3000;
+
+// app.get("/", (req, res) => {
+//   res.status(200).send("I am automatically deployed!");
+// });
+
+// app.listen( PORT, () => console.log("Running") );
